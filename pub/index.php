@@ -25,7 +25,6 @@
  *                                  *
  \**********************************/
 
-// TODO: Make more stuff configurable (isn't this just cleanup?)
 //
 // TODO: Rewrite upload part to checksum each chunk, store the checksums in mongodb.
 //        This way we can detect if a similar file already exists before it is fully uploaded.
@@ -34,25 +33,19 @@
 //
 // TODO: Do something with the statistics in stats collection
 //
-// TODO: rewrite all mongoDB stuff to support $otherDB backends as well
-//
-// TODO: Remove all apache dependency (Done?)
-//        Confirm if I work with $otherWebserver
-//        Webserver needs support for chunking!
-//
 // TODO: CLEANUP!!
 //
 
 
-// We need some configuration
-//   Pass it here, or use an external (ini) file
-//$config['path']      = "/absoulte/path/to/your/data";
-//$config['URL']       = "http://url.com;
-//$config['chunkSize'] = 8192;
-//$config['mongoDb']   = "mongodb_to_put_files_in";
+// Attempt to read the configuration
+$configFile = __DIR__ . '/../config.ini';
+
+if (!is_readable($configFile)) {
+   die('No config.ini found in root directory');
+}
 
 // I use an external file
-$config = parse_ini_file("../config.ini");
+$config = parse_ini_file($configFile, true);
 
 // This function is a (really) minor modification of Aidan Lister's str_rand()
 function str_rand($length = 8, $seeds = 'alphanum')
@@ -92,13 +85,22 @@ function filter(&$value) {
 }
 
 
+$authentication = array();
+
+if ($config['mongo']['enableAuth']) {
+    $authentication =  array("username" => $config['mongo']['username'], "password" => $config['mongo']['password']);
+}
+
 // Create MongoDB connection
-$mc = new Mongo();
-$db = $config['mongoDb'];
+$mc = new MongoClient("mongodb://localhost", $authentication);
+
+$db = $config['mongo']['db'];
 // Select file collection
 $mcFiles = $mc->selectDB($db)->selectCollection("files");
 // Select stats collection
 $mcStats = $mc->selectDB($db)->selectCollection("stats");
+
+
 
 if($_SERVER['REQUEST_METHOD'] == 'PUT')
 {
@@ -224,6 +226,8 @@ if($_SERVER['REQUEST_METHOD'] == 'PUT')
 // If we get HTTP GET, they probably want to download something
 elseif ($_SERVER['REQUEST_METHOD'] == 'GET')
 {
+
+
   // let's confirm if a filename is requested
   if (count($_GET) > 0)
   {
@@ -232,6 +236,7 @@ elseif ($_SERVER['REQUEST_METHOD'] == 'GET')
     {
       if ($mc)
       {
+	
         // Let's see if we have this file
         $fileName = $_GET['key'];
         $filePath = $config['path'] . $fileName;
@@ -253,11 +258,17 @@ elseif ($_SERVER['REQUEST_METHOD'] == 'GET')
           // Let's not force a download dialog, but we can with the following header
           // header("Content-Disposition: attachment; filename=\"$fileName\"");
 
+	   // Let's not force a download dialog, but we can with the following header
+          header("Content-Disposition: inline; filename=\"$fileName\"");
+
+          ob_clean();
+          flush();
+          readfile($filePath);
+
           // Let's store this success in DB so we can show off!
           $fileId = new MongoId($mcResult["_id"]);
           $mcQuery = array("fileId" => $fileId, "fileName" => $fileName, "timeStamp" => new MongoDate(), "remoteAddress" => getenv("REMOTE_ADDR"), "remoteUserAgent" => getenv("HTTP_USER_AGENT"));
           $mcStats->insert($mcQuery);
-
 
           exit;
         }
