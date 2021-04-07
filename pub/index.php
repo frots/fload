@@ -385,7 +385,7 @@ elseif ($_SERVER['REQUEST_METHOD'] == 'DELETE' && isset($_GET['key']))
   }
   else
   {
-    header("HTTP/1.1 405 Fuck Off");
+    header("HTTP/1.1 405");
     echo "405: Computer says \"No!\"";
   }
 }
